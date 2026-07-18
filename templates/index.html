@@ -1,0 +1,1157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Colab Manager PRO</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0d1117;
+            color: #c9d1d9;
+            min-height: 100vh;
+        }
+        .header {
+            background: #161b22;
+            border-bottom: 1px solid #30363d;
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .header-left { display: flex; align-items: center; gap: 12px; }
+        .logo {
+            width: 36px; height: 36px;
+            background: linear-gradient(135deg, #fbbc04, #ea4335);
+            border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 18px;
+        }
+        .header-title { font-size: 18px; font-weight: 600; }
+        .header-subtitle { font-size: 12px; color: #8b949e; }
+        .badge {
+            background: #238636;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: 600;
+        }
+        .add-account-btn {
+            background: #238636;
+            color: white;
+            border: none;
+            width: 28px; height: 28px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .stats-bar {
+            display: flex;
+            gap: 16px;
+            padding: 16px 24px;
+            background: #161b22;
+            border-bottom: 1px solid #30363d;
+        }
+        .stat-card {
+            background: #21262d;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 12px 20px;
+            min-width: 120px;
+        }
+        .stat-value { font-size: 24px; font-weight: 700; }
+        .stat-label { font-size: 12px; color: #8b949e; margin-top: 4px; }
+        .stat-active { color: #3fb950; }
+        .stat-inactive { color: #f85149; }
+        .toolbar {
+            display: flex;
+            gap: 10px;
+            padding: 16px 24px;
+            align-items: center;
+        }
+        .btn {
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: 1px solid #30363d;
+            background: #21262d;
+            color: #c9d1d9;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+        .btn:hover { background: #30363d; }
+        .btn-primary {
+            background: #238636;
+            border-color: #238636;
+            color: white;
+        }
+        .btn-primary:hover { background: #2ea043; }
+        .btn-danger {
+            background: #da3633;
+            border-color: #da3633;
+            color: white;
+        }
+        .btn-danger:hover { background: #f85149; }
+        .btn-warning {
+            background: #9e6a03;
+            border-color: #9e6a03;
+            color: white;
+        }
+        .btn-warning:hover { background: #bb8009; }
+        .btn-active {
+            background: #1f6feb;
+            border-color: #1f6feb;
+            color: white;
+        }
+        .view-toggle {
+            display: flex;
+            margin-left: auto;
+            background: #21262d;
+            border-radius: 6px;
+            border: 1px solid #30363d;
+            overflow: hidden;
+        }
+        .view-toggle button {
+            padding: 8px 16px;
+            border: none;
+            background: transparent;
+            color: #8b949e;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .view-toggle button.active {
+            background: #30363d;
+            color: #c9d1d9;
+        }
+        .sessions-container {
+            padding: 0 24px 24px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+            gap: 16px;
+        }
+        .sessions-container.list-view {
+            grid-template-columns: 1fr;
+        }
+        .session-card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 16px;
+            transition: border-color 0.2s;
+        }
+        .session-card:hover { border-color: #58a6ff; }
+        .session-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+        .session-name {
+            font-size: 16px;
+            font-weight: 600;
+            color: #e6edf3;
+        }
+        .status-badge {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .status-active {
+            background: rgba(46, 160, 67, 0.15);
+            color: #3fb950;
+        }
+        .status-inactive {
+            background: rgba(218, 54, 51, 0.15);
+            color: #f85149;
+        }
+        .session-info {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        .info-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            color: #8b949e;
+        }
+        .info-item .icon { font-size: 14px; }
+        .session-url {
+            font-size: 11px;
+            color: #58a6ff;
+            word-break: break-all;
+            margin-bottom: 10px;
+            cursor: pointer;
+            line-height: 1.4;
+        }
+        .session-url:hover { text-decoration: underline; }
+
+        /* ===== INLINE CONSOLE ===== */
+        .inline-console {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            margin: 10px 0;
+            overflow: hidden;
+            display: none;
+        }
+        .inline-console.active { display: block; }
+        .inline-console-header {
+            background: #21262d;
+            padding: 6px 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 11px;
+            border-bottom: 1px solid #30363d;
+        }
+        .inline-console-status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .inline-console-dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: #f85149;
+        }
+        .inline-console-dot.connected { background: #3fb950; animation: pulse 1.5s infinite; }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .inline-console-output {
+            height: 160px;
+            overflow-y: auto;
+            padding: 10px 12px;
+            font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+            font-size: 11px;
+            line-height: 1.5;
+            color: #e6edf3;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .inline-console-input-row {
+            display: flex;
+            border-top: 1px solid #30363d;
+        }
+        .inline-console-input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            padding: 8px 12px;
+            color: #c9d1d9;
+            font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+            font-size: 11px;
+            outline: none;
+        }
+        .inline-console-send {
+            background: #238636;
+            color: white;
+            border: none;
+            padding: 0 14px;
+            cursor: pointer;
+            font-size: 11px;
+        }
+
+        .session-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 8px;
+        }
+        .session-actions .btn {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 24px;
+            width: 90%;
+            max-width: 480px;
+        }
+        .modal-title { font-size: 18px; font-weight: 600; margin-bottom: 16px; }
+        .form-group { margin-bottom: 16px; }
+        .form-label { display: block; font-size: 13px; color: #8b949e; margin-bottom: 6px; }
+        .form-input {
+            width: 100%;
+            padding: 10px 12px;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            color: #c9d1d9;
+            font-size: 14px;
+            outline: none;
+        }
+        .form-input:focus { border-color: #58a6ff; }
+        .form-select {
+            width: 100%;
+            padding: 10px 12px;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            color: #c9d1d9;
+            font-size: 14px;
+            outline: none;
+        }
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+        .toast-container {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            z-index: 1001;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .toast {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 12px 16px;
+            max-width: 400px;
+            animation: slideIn 0.3s ease;
+        }
+        .toast-success { border-left: 3px solid #3fb950; }
+        .toast-error { border-left: 3px solid #f85149; }
+        .toast-warning { border-left: 3px solid #bb8009; }
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        .loading-spinner {
+            display: inline-block;
+            width: 14px; height: 14px;
+            border: 2px solid #30363d;
+            border-top-color: #58a6ff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .empty-state {
+            text-align: center;
+            padding: 60px 24px;
+            color: #8b949e;
+        }
+        .empty-state-icon { font-size: 48px; margin-bottom: 16px; }
+        .empty-state-title { font-size: 18px; font-weight: 600; margin-bottom: 8px; color: #c9d1d9; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-left">
+            <div class="logo">📊</div>
+            <div>
+                <div class="header-title">Colab Manager <span class="badge">PRO</span></div>
+                <div class="header-subtitle">Google Colab Session Manager</div>
+            </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;">
+            <!-- Account switcher removed as requested -->
+            <button class="add-account-btn" onclick="showAddAccountModal()" title="Add Account">+</button>
+        </div>
+    </div>
+
+    <div class="stats-bar">
+        <div class="stat-card">
+            <div class="stat-value" id="totalCount">0</div>
+            <div class="stat-label">Total Sessions</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value stat-active" id="activeCount">0</div>
+            <div class="stat-label">Active</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value stat-inactive" id="inactiveCount">0</div>
+            <div class="stat-label">Inactive</div>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <button class="btn btn-primary" onclick="showCreateSessionModal()">
+            <span>➕</span> Buat Session Baru
+        </button>
+        <button class="btn btn-warning" onclick="syncSessions()">
+            <span>🔄</span> Sync
+        </button>
+        <button class="btn btn-warning" onclick="cleanAllInactivePermanently()">
+            <span>🧹</span> Bersihkan Semua Inactive (Permanent)
+        </button>
+        <div class="view-toggle">
+            <button class="active" onclick="setView('grid')" id="gridView">⊞ Grid</button>
+            <button onclick="setView('list')" id="listView">☰ List</button>
+        </div>
+    </div>
+
+    <div class="sessions-container" id="sessionsContainer">
+        <div class="empty-state">
+            <div class="empty-state-icon">📭</div>
+            <div class="empty-state-title">Belum ada session</div>
+            <p>Klik "Buat Session Baru" untuk memulai</p>
+        </div>
+    </div>
+
+    <!-- Create Session Modal -->
+    <div class="modal-overlay" id="createModal">
+        <div class="modal">
+            <div class="modal-title">Buat Session Baru</div>
+            <div class="form-group">
+                <label class="form-label">Nama Session</label>
+                <input type="text" class="form-input" id="sessionName" placeholder="Contoh: JOKO1">
+            </div>
+            <div class="form-group">
+                <label class="form-label">GPU</label>
+                <select class="form-select" id="sessionGpu">
+                    <option value="T4">T4</option>
+                    <option value="L4">L4</option>
+                    <option value="A100">A100</option>
+                    <option value="V100">V100</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Variant</label>
+                <select class="form-select" id="sessionVariant">
+                    <option value="gpu">GPU</option>
+                    <option value="cpu">CPU</option>
+                    <option value="tpu">TPU</option>
+                </select>
+            </div>
+            <div class="modal-actions">
+                <button class="btn" onclick="hideModal('createModal')">Batal</button>
+                <button class="btn btn-primary" onclick="createSession()">Buat</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Account Modal -->
+    <div class="modal-overlay" id="addAccountModal">
+        <div class="modal">
+            <div class="modal-title">Tambah Account</div>
+            <div class="form-group">
+                <label class="form-label">Nama Account</label>
+                <input type="text" class="form-input" id="accountName" placeholder="Contoh: joko1">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Email (opsional)</label>
+                <input type="email" class="form-input" id="accountEmail" placeholder="email@gmail.com">
+            </div>
+            <div class="modal-actions">
+                <button class="btn" onclick="hideModal('addAccountModal')">Batal</button>
+                <button class="btn btn-primary" onclick="addAccount()">Tambah</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Auth Modal -->
+    <div class="modal-overlay" id="authModal">
+        <div class="modal">
+            <div class="modal-title">Login Google Account</div>
+            <div id="authStep1">
+                <p style="margin-bottom:16px;font-size:13px;color:#8b949e;">
+                    Klik tombol di bawah untuk mendapatkan URL login. Buka URL di browser, login dengan Google account, lalu copy authorization code.
+                </p>
+                <button class="btn btn-primary" style="width:100%;" onclick="getAuthUrl()">Dapatkan URL Login</button>
+            </div>
+            <div id="authStep2" style="display:none;">
+                <div class="form-group">
+                    <label class="form-label">Auth URL</label>
+                    <input type="text" class="form-input" id="authUrl" readonly onclick="this.select()">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Authorization Code</label>
+                    <input type="text" class="form-input" id="authCode" placeholder="Paste code di sini...">
+                </div>
+                <div class="modal-actions">
+                    <button class="btn" onclick="hideModal('authModal')">Batal</button>
+                    <button class="btn btn-primary" onclick="exchangeCode()">Verifikasi</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script>
+        // ============================================
+        // STATE
+        // ============================================
+        let sessions = [];
+        let accounts = [];
+        let currentAccount = '';
+        let currentView = 'grid';
+        let eventSources = {};
+        let authAccountName = '';
+        let consoleStates = {}; // Track which sessions have console open
+        let consoleBuffers = {}; // Store console output per session
+
+        // ============================================
+        // INIT
+        // ============================================
+        document.addEventListener('DOMContentLoaded', () => {
+            loadAccounts();
+            loadSessions();
+            setInterval(loadSessions, 5000);
+        });
+
+        // ============================================
+        // API CALLS
+        // ============================================
+        async function apiGet(url) {
+            try {
+                const res = await fetch(url);
+                return await res.json();
+            } catch (e) {
+                showToast('Network error: ' + e.message, 'error');
+                return null;
+            }
+        }
+
+        async function apiPost(url, data) {
+            try {
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                return await res.json();
+            } catch (e) {
+                showToast('Network error: ' + e.message, 'error');
+                return null;
+            }
+        }
+
+        async function apiDelete(url) {
+            try {
+                const res = await fetch(url, { method: 'DELETE' });
+                return await res.json();
+            } catch (e) {
+                showToast('Network error: ' + e.message, 'error');
+                return null;
+            }
+        }
+
+        // ============================================
+        // ACCOUNTS
+        // ============================================
+        async function loadAccounts() {
+            const data = await apiGet('/api/accounts');
+            if (!data || !data.success) return;
+
+            accounts = data.accounts;
+            currentAccount = data.active || '';
+
+            const select = document.getElementById('accountSelect');
+            select.innerHTML = '';
+
+            if (accounts.length === 0) {
+                select.innerHTML = '<option value="">No accounts</option>';
+                return;
+            }
+
+            accounts.forEach(acc => {
+                const opt = document.createElement('option');
+                opt.value = acc.name;
+                opt.textContent = acc.name + (acc.active ? ' ★' : '') + (acc.has_token ? '' : ' (no auth)');
+                if (acc.active) opt.selected = true;
+                select.appendChild(opt);
+            });
+        }
+
+        async function switchAccount(name) {
+            if (!name) return;
+            const data = await apiPost(`/api/accounts/${name}/switch`, {});
+            if (data && data.success) {
+                showToast(`Switched to account: ${name}`, 'success');
+                currentAccount = name;
+                loadSessions();
+            }
+        }
+
+        function showAddAccountModal() {
+            document.getElementById('accountName').value = '';
+            document.getElementById('accountEmail').value = '';
+            showModal('addAccountModal');
+        }
+
+        async function addAccount() {
+            const name = document.getElementById('accountName').value.trim();
+            const email = document.getElementById('accountEmail').value.trim();
+
+            if (!name) {
+                showToast('Nama account wajib diisi', 'error');
+                return;
+            }
+
+            const data = await apiPost('/api/accounts', { name, email });
+            if (data && data.success) {
+                showToast(`Account ${name} ditambahkan`, 'success');
+                hideModal('addAccountModal');
+                authAccountName = name;
+                showModal('authModal');
+                loadAccounts();
+            } else {
+                showToast(data?.error || 'Gagal menambah account', 'error');
+            }
+        }
+
+        async function getAuthUrl() {
+            const data = await apiGet(`/api/accounts/${authAccountName}/auth-url`);
+            if (data && data.success) {
+                document.getElementById('authUrl').value = data.auth_url;
+                document.getElementById('authStep1').style.display = 'none';
+                document.getElementById('authStep2').style.display = 'block';
+            }
+        }
+
+        async function exchangeCode() {
+            const code = document.getElementById('authCode').value.trim();
+            if (!code) {
+                showToast('Authorization code wajib diisi', 'error');
+                return;
+            }
+
+            const data = await apiPost(`/api/accounts/${authAccountName}/exchange`, { code });
+            if (data && data.success) {
+                showToast('Login berhasil!', 'success');
+                hideModal('authModal');
+                loadAccounts();
+            } else {
+                showToast(data?.error || 'Gagal verifikasi', 'error');
+            }
+        }
+
+        // ============================================
+        // SESSIONS - FIXED: Preserve console state
+        // ============================================
+        async function loadSessions() {
+            const data = await apiGet('/api/sessions');
+            if (!data || !data.success) return;
+
+            sessions = data.sessions;
+            document.getElementById('totalCount').textContent = data.count;
+            document.getElementById('activeCount').textContent = data.active;
+            document.getElementById('inactiveCount').textContent = data.inactive;
+
+            renderSessions();
+        }
+
+        function renderSessions() {
+            const container = document.getElementById('sessionsContainer');
+
+            if (sessions.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state" style="grid-column:1/-1;">
+                        <div class="empty-state-icon">📭</div>
+                        <div class="empty-state-title">Belum ada session</div>
+                        <p>Klik "Buat Session Baru" untuk memulai</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // Get list of sessions with active console
+            const activeConsoles = Object.keys(consoleStates).filter(name => consoleStates[name]);
+
+            // If there are active consoles, use granular update instead of full re-render
+            if (activeConsoles.length > 0) {
+                updateSessionsGranular(activeConsoles);
+            } else {
+                // No active consoles - safe to full re-render
+                container.innerHTML = sessions.map(s => buildSessionCard(s)).join('');
+            }
+        }
+
+        // Granular update: only update non-console sessions, preserve console sessions
+        function updateSessionsGranular(preserveNames) {
+            const container = document.getElementById('sessionsContainer');
+
+            // Check if container is empty or needs full rebuild
+            if (container.querySelector('.empty-state')) {
+                container.innerHTML = sessions.map(s => buildSessionCard(s)).join('');
+                return;
+            }
+
+            // Build a map of existing cards
+            const existingCards = {};
+            container.querySelectorAll('.session-card').forEach(card => {
+                const name = card.getAttribute('data-name');
+                if (name) existingCards[name] = card;
+            });
+
+            // Process each session
+            sessions.forEach(s => {
+                if (preserveNames.includes(s.name) && existingCards[s.name]) {
+                    // Session has active console and exists - ONLY update status badge
+                    const badge = existingCards[s.name].querySelector('.status-badge');
+                    if (badge) {
+                        badge.className = `status-badge status-${s.status}`;
+                        badge.textContent = s.status;
+                    }
+                    // Update URL if changed
+                    const urlDiv = existingCards[s.name].querySelector('.session-url');
+                    if (s.url && (!urlDiv || urlDiv.textContent !== s.url)) {
+                        if (urlDiv) {
+                            urlDiv.textContent = s.url;
+                            urlDiv.onclick = () => window.open(s.url, '_blank');
+                        }
+                    }
+                } else {
+                    // No active console or new session - full render this card
+                    if (existingCards[s.name]) {
+                        existingCards[s.name].outerHTML = buildSessionCard(s);
+                    } else {
+                        // New session - append
+                        const temp = document.createElement('div');
+                        temp.innerHTML = buildSessionCard(s);
+                        container.appendChild(temp.firstElementChild);
+                    }
+                }
+            });
+
+            // Remove cards for sessions that no longer exist
+            const currentNames = sessions.map(s => s.name);
+            Object.keys(existingCards).forEach(name => {
+                if (!currentNames.includes(name)) {
+                    existingCards[name].remove();
+                }
+            });
+        }
+
+        function buildSessionCard(s) {
+            const isConsoleOpen = consoleStates[s.name] || false;
+            const consoleBuffer = consoleBuffers[s.name] || '';
+            return `
+            <div class="session-card" data-name="${s.name}">
+                <div class="session-header">
+                    <div class="session-name">${s.name}</div>
+                    <div class="status-badge status-${s.status}">${s.status}</div>
+                </div>
+                <div class="session-info">
+                    <div class="info-item">
+                        <span class="icon">👤</span>
+                        <span>${s.account || 'default'}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="icon">💻</span>
+                        <span>${s.hardware || 'N/A'}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="icon">⚙️</span>
+                        <span>${s.variant || 'N/A'}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="icon">🕐</span>
+                        <span>${formatTime(s.created_at)}</span>
+                    </div>
+                </div>
+                <!-- Session URL hidden as requested -->
+
+                <!-- INLINE CONSOLE -->
+                <div class="inline-console ${isConsoleOpen ? 'active' : ''}" id="console-${s.name}">
+                    <div class="inline-console-header">
+                        <div class="inline-console-status">
+                            <div class="inline-console-dot ${isConsoleOpen ? 'connected' : ''}" id="console-dot-${s.name}"></div>
+                            <span id="console-status-${s.name}">${isConsoleOpen ? 'Connected' : 'Disconnected'}</span>
+                        </div>
+                        <span style="font-size:10px; color:#8b949e; margin-right:8px;">colab-multi run ${s.account} console</span>
+                        <button class="btn" style="padding:2px 8px;font-size:10px;" onclick="closeConsole('${s.name}')">✕ Tutup</button>
+                    </div>
+                    <div class="inline-console-output" id="console-output-${s.name}">${consoleBuffer}</div>
+                    <div class="inline-console-input-row">
+                        <input type="text" class="inline-console-input" id="console-input-${s.name}"
+                            placeholder="Type command and press Enter..."
+                            onkeydown="if(event.key==='Enter')sendConsoleInput('${s.name}')">
+                        <button class="inline-console-send" onclick="sendConsoleInput('${s.name}')">Send</button>
+                    </div>
+                </div>
+
+                <div class="session-actions">
+                    ${s.url ? `<button class="btn" onclick="window.open('${s.url}', '_blank')">🔗 Open</button>` : ''}
+                    <button class="btn ${isConsoleOpen ? 'btn-active' : ''}" id="btn-console-${s.name}" onclick="toggleConsole('${s.name}', '${s.account || currentAccount || ''}')">
+                        💻 ${isConsoleOpen ? 'Console On' : 'Console'}
+                    </button>
+                    <button class="btn btn-danger" onclick="stopSession('${s.name}')">⏹ Stop</button>
+                </div>
+            </div>
+            `;
+        }
+
+        function formatTime(iso) {
+            if (!iso) return 'N/A';
+            try {
+                const d = new Date(iso);
+                return d.toLocaleString('id-ID', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' });
+            } catch { return iso; }
+        }
+
+        function setView(view) {
+            currentView = view;
+            document.getElementById('gridView').classList.toggle('active', view === 'grid');
+            document.getElementById('listView').classList.toggle('active', view === 'list');
+            document.getElementById('sessionsContainer').classList.toggle('list-view', view === 'list');
+        }
+
+        // ============================================
+        // CREATE SESSION
+        // ============================================
+        function showCreateSessionModal() {
+            if (!currentAccount) {
+                showToast('Pilih account terlebih dahulu!', 'warning');
+                return;
+            }
+            document.getElementById('sessionName').value = '';
+            showModal('createModal');
+        }
+
+        async function createSession() {
+            const name = document.getElementById('sessionName').value.trim();
+            const gpu = document.getElementById('sessionGpu').value;
+            const variant = document.getElementById('sessionVariant').value;
+
+            if (!name) {
+                showToast('Nama session wajib diisi', 'error');
+                return;
+            }
+
+            const btn = document.querySelector('#createModal .btn-primary');
+            btn.innerHTML = '<div class="loading-spinner"></div> Creating...';
+            btn.disabled = true;
+
+            const data = await apiPost('/api/sessions', {
+                name,
+                gpu,
+                variant,
+                account: currentAccount,
+                auto_console: true
+            });
+
+            btn.innerHTML = 'Buat';
+            btn.disabled = false;
+
+            if (data && data.success) {
+                showToast(`Session ${name} berhasil dibuat!`, 'success');
+                hideModal('createModal');
+                
+                // Refresh sessions multiple times to catch new session quickly
+                loadSessions();
+                setTimeout(() => loadSessions(), 2000);
+                setTimeout(() => loadSessions(), 5000);
+                setTimeout(() => loadSessions(), 8000);
+
+                // Try to open console after creation
+                setTimeout(() => {
+                    if (currentAccount) {
+                        toggleConsole(name, currentAccount);
+                    }
+                }, 4000);
+            } else {
+                showToast(data?.error || 'Gagal membuat session', 'error');
+            }
+        }
+
+        // ============================================
+        // STOP SESSION
+        // ============================================
+        async function stopSession(name) {
+            if (!confirm(`Yakin mau stop session "${name}"?`)) return;
+
+            closeConsole(name);
+
+            const data = await apiDelete(`/api/sessions/${name}?account=${currentAccount}`);
+            if (data && data.success) {
+                showToast(`Session ${name} dihentikan`, 'success');
+                loadSessions();
+            } else {
+                showToast(data?.error || 'Gagal menghentikan session', 'error');
+            }
+        }
+
+        // ============================================
+        // SYNC & CLEAN
+        // ============================================
+        async function syncSessions() {
+            const data = await apiPost('/api/sessions/sync', {});
+            if (data && data.success) {
+                showToast('Session synced!', 'success');
+                loadSessions();
+            }
+        }
+
+        async function cleanAllInactivePermanently() {
+            const inactive = sessions.filter(s => s.status === 'inactive');
+            if (inactive.length === 0) {
+                showToast('Tidak ada session non-aktif', 'warning');
+                return;
+            }
+
+            if (!confirm(`Yakin mau HAPUS PERMANEN ${inactive.length} session non-aktif?\n\nSemua akan hilang total dari record!`)) {
+                return;
+            }
+
+            let successCount = 0;
+            for (const s of inactive) {
+                const acc = s.account || currentAccount || '';
+                const data = await apiDelete(`/api/sessions/${s.name}/permanent?account=${acc}`);
+                if (data && data.success) successCount++;
+            }
+            showToast(`${successCount} session non-aktif dihapus permanen`, 'success');
+            loadSessions();
+        }
+
+        // ============================================
+        // INLINE CONSOLE - Toggle & Stream
+        // ============================================
+        async function toggleConsole(name, account) {
+            const panel = document.getElementById(`console-${name}`);
+            const isOpen = panel && panel.classList.contains('active');
+
+            if (isOpen) {
+                closeConsole(name);
+                return;
+            }
+
+            // Open console
+            consoleStates[name] = true;
+            if (panel) panel.classList.add('active');
+
+            const btn = document.getElementById(`btn-console-${name}`);
+            if (btn) {
+                btn.classList.add('btn-active');
+                btn.innerHTML = '💻 Console On';
+            }
+
+            const output = document.getElementById(`console-output-${name}`);
+            if (output) {
+                output.innerHTML += '<span style="color:#8b949e;">Starting console via colab-multi...</span>\n';
+            }
+
+            const acc = account || currentAccount;
+            if (!acc) {
+                if (output) output.innerHTML += '<span style="color:#f85149;">Error: No account selected</span>\n';
+                return;
+            }
+
+            // Start console backend
+            const startData = await apiPost(`/api/sessions/${name}/console`, { account: acc });
+
+            if (!startData || !startData.success) {
+                if (output) output.innerHTML += `<span style="color:#f85149;">Error: ${startData?.error || 'Failed to start console'}</span>\n`;
+                return;
+            }
+
+            if (output) output.innerHTML += `<span style="color:#3fb950;">✓ ${startData.message}</span>\n`;
+
+            // Connect to SSE stream
+            connectConsoleStream(name, acc);
+        }
+
+        function connectConsoleStream(name, account) {
+            const output = document.getElementById(`console-output-${name}`);
+            const dot = document.getElementById(`console-dot-${name}`);
+            const status = document.getElementById(`console-status-${name}`);
+
+            // Close existing SSE
+            if (eventSources[name]) {
+                eventSources[name].close();
+                delete eventSources[name];
+            }
+
+            const es = new EventSource(`/api/sessions/${name}/console/stream`);
+            eventSources[name] = es;
+
+            es.onopen = () => {
+                if (dot) dot.classList.add('connected');
+                if (status) status.textContent = 'Connected';
+            };
+
+            es.onmessage = (event) => {
+                try {
+                    const msg = JSON.parse(event.data);
+                    if (msg.type === 'output') {
+                        if (output) {
+                            output.innerHTML += escapeHtml(msg.message) + '\n';
+                            output.scrollTop = output.scrollHeight;
+                            // Save to buffer
+                            consoleBuffers[name] = output.innerHTML;
+                        }
+                    } else if (msg.type === 'error') {
+                        if (output) {
+                            output.innerHTML += `<span style="color:#f85149;">[ERROR] ${escapeHtml(msg.message)}</span>\n`;
+                            output.scrollTop = output.scrollHeight;
+                            consoleBuffers[name] = output.innerHTML;
+                        }
+                    } else if (msg.type === 'connected') {
+                        if (output) {
+                            output.innerHTML += `<span style="color:#3fb950;">[${escapeHtml(msg.message)}]</span>\n`;
+                            output.scrollTop = output.scrollHeight;
+                            consoleBuffers[name] = output.innerHTML;
+                        }
+                    } else if (msg.type === 'closed') {
+                        if (output) {
+                            output.innerHTML += `<span style="color:#bb8009;">[${escapeHtml(msg.message)}]</span>\n`;
+                            consoleBuffers[name] = output.innerHTML;
+                        }
+                        if (dot) dot.classList.remove('connected');
+                        if (status) status.textContent = 'Disconnected';
+                        // Auto-reconnect after 2 seconds
+                        setTimeout(() => {
+                            if (consoleStates[name]) {
+                                if (output) output.innerHTML += '<span style="color:#8b949e;">Reconnecting...</span>\n';
+                                connectConsoleStream(name, account);
+                            }
+                        }, 2000);
+                    }
+                    // heartbeat - ignore
+                } catch (e) {
+                    if (output) {
+                        output.innerHTML += escapeHtml(event.data) + '\n';
+                        output.scrollTop = output.scrollHeight;
+                        consoleBuffers[name] = output.innerHTML;
+                    }
+                }
+            };
+
+            es.onerror = (err) => {
+                if (output) {
+                    output.innerHTML += '<span style="color:#f85149;">[Connection error - reconnecting in 3s...]</span>\n';
+                    consoleBuffers[name] = output.innerHTML;
+                }
+                if (dot) dot.classList.remove('connected');
+                if (status) status.textContent = 'Reconnecting...';
+
+                setTimeout(() => {
+                    if (consoleStates[name] && eventSources[name] === es) {
+                        connectConsoleStream(name, account);
+                    }
+                }, 3000);
+            };
+        }
+
+        function closeConsole(name) {
+            consoleStates[name] = false;
+            delete consoleBuffers[name];
+
+            // Close SSE
+            if (eventSources[name]) {
+                eventSources[name].close();
+                delete eventSources[name];
+            }
+
+            // Stop console on server
+            apiDelete(`/api/sessions/${name}/console`);
+
+            // Update UI
+            const panel = document.getElementById(`console-${name}`);
+            if (panel) panel.classList.remove('active');
+
+            const dot = document.getElementById(`console-dot-${name}`);
+            const status = document.getElementById(`console-status-${name}`);
+            if (dot) dot.classList.remove('connected');
+            if (status) status.textContent = 'Disconnected';
+
+            const btn = document.getElementById(`btn-console-${name}`);
+            if (btn) {
+                btn.classList.remove('btn-active');
+                btn.innerHTML = '💻 Console';
+            }
+        }
+
+        async function sendConsoleInput(name) {
+            const input = document.getElementById(`console-input-${name}`);
+            const text = input.value.trim();
+            if (!text) return;
+
+            const output = document.getElementById(`console-output-${name}`);
+            if (output) {
+                output.innerHTML += `<span style="color:#58a6ff;">> ${escapeHtml(text)}</span>\n`;
+                output.scrollTop = output.scrollHeight;
+                consoleBuffers[name] = output.innerHTML;
+            }
+
+            const data = await apiPost(`/api/sessions/${name}/console/input`, { input: text });
+            if (!data || !data.success) {
+                if (output) {
+                    output.innerHTML += `<span style="color:#f85149;">[Failed to send input]</span>\n`;
+                    consoleBuffers[name] = output.innerHTML;
+                }
+            }
+
+            input.value = '';
+            // Re-focus input after sending
+            input.focus();
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // ============================================
+        // MODALS
+        // ============================================
+        function showModal(id) {
+            document.getElementById(id).classList.add('active');
+            document.getElementById('authStep1').style.display = 'block';
+            document.getElementById('authStep2').style.display = 'none';
+        }
+
+        function hideModal(id) {
+            document.getElementById(id).classList.remove('active');
+        }
+
+        document.querySelectorAll('.modal-overlay').forEach(overlay => {
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) overlay.classList.remove('active');
+            });
+        });
+
+        // ============================================
+        // TOAST
+        // ============================================
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.textContent = message;
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(100%)';
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+    </script>
+</body>
+</html>
