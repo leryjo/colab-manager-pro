@@ -7,11 +7,13 @@ This tool manages multiple Google accounts by isolating:
 - OAuth tokens per account
 - Session metadata per account
 - Client OAuth configs per account
+- NOW ALSO: Dedicated venv + named screen session per account ID (to prevent collisions with public/shared venvs/screens)
 
 Usage:
-    python colab_multi_auth.py add joko1 --email joko1@gmail.com
-    python colab_multi_auth.py auth joko1
-    python colab_multi_auth.py new joko1 colab1 --gpu T4
+    colab-multi add joko1 --email joko1@gmail.com
+    colab-multi auth joko1
+    colab-multi new joko1 sesi1 --gpu T4
+    colab-multi remove joko1   # This will ALSO permanently delete venv + kill screen for joko1
 """
 
 import os
@@ -60,6 +62,76 @@ class ColabMultiAuth:
         acc_dir.mkdir(parents=True, exist_ok=True)
         return acc_dir
 
+    def _get_venv_dir(self, name: str) -> Path:
+        """Get dedicated venv directory for an account (NEW for collision-free isolation)"""
+        venv_dir = self.BASE_DIR / "venvs" / name
+        venv_dir.mkdir(parents=True, exist_ok=True)
+        return venv_dir
+
+    def ensure_account_venv_and_screen(self, name: str):
+        """
+        NEW FEATURE: Ensure dedicated venv + screen session named exactly after (ID AKUN)
+        This prevents tabrakan/collision with other public or shared venv/screen sessions.
+        Venv and screen are created ONCE per account and reused for all its new sessions.
+        """
+        if name not in self.accounts["accounts"]:
+            print(f"Error: Account '{name}' not found. Add it first.")
+            return None, None
+
+        venv_dir = self._get_venv_dir(name)
+        python_bin = venv_dir / "bin" / "python"
+
+        if not python_bin.exists():
+            print(f"🛠️  Creating dedicated venv for account '{name}' at {venv_dir} ...")
+            try:
+                subprocess.run(
+                    [sys.executable, "-m", "venv", str(venv_dir)],
+                    check=True,
+                    capture_output=True
+                )
+                # Upgrade pip (good practice)
+                subprocess.run(
+                    [str(python_bin), "-m", "pip", "install", "--upgrade", "pip", "setuptools", "wheel"],
+                    check=True, capture_output=True
+                )
+                print(f"   ✅ Venv ready. You can pip install packages inside screen -r {name}")
+            except subprocess.CalledProcessError as e:
+                print(f"⚠️  Warning: Could not fully create/upgrade venv: {e}")
+        else:
+            print(f"   ♻️  Using existing dedicated venv for '{name}'")
+
+        # === SCREEN SESSION with exact name = ID AKUN (no collision) ===
+        screen_name = name  # IMPORTANT: nama screen = ID AKUN persis seperti request user
+        try:
+            result = subprocess.run(
+                ["screen", "-ls"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            screen_exists = screen_name in result.stdout
+        except (subprocess.SubprocessError, FileNotFoundError):
+            print("⚠️  'screen' command not found. Please install: sudo apt install -y screen")
+            screen_exists = False
+
+        if not screen_exists:
+            print(f"🖥️  Starting dedicated screen '{screen_name}' (venv auto-activated inside)...")
+            # Command that activates venv then gives interactive bash login shell
+            activate_cmd = f"source {venv_dir}/bin/activate && exec bash --login"
+            try:
+                subprocess.run(
+                    ["screen", "-dmS", screen_name, "bash", "-c", activate_cmd],
+                    check=True
+                )
+                print(f"   ✅ Screen started! Attach anytime with:  screen -r {screen_name}")
+                print(f"      (Inside screen your dedicated venv is already activated)")
+            except subprocess.CalledProcessError:
+                print(f"⚠️  Failed to start screen session '{screen_name}' (may already be running or permission issue)")
+        else:
+            print(f"   ♻️  Screen session '{screen_name}' is already running.")
+
+        return venv_dir, screen_name
+
     def _backup_colab_config(self):
         """Backup current colab-cli config before switching"""
         if not self.COLAB_CONFIG_DIR.exists():
@@ -73,7 +145,7 @@ class ColabMultiAuth:
     def add(self, name: str, email: str = None, client_oauth: str = None):
         """Register a new account"""
         if name in self.accounts["accounts"]:
-            print(f"⚠️  Account '{name}' already exists. Use 'remove' first if you want to replace.")
+            print(f"Warning:  Account '{name}' already exists. Use 'remove' first if you want to replace.")
             return
 
         acc_dir = self._get_account_dir(name)
@@ -87,7 +159,6 @@ class ColabMultiAuth:
             "config_dir": str(acc_dir)
         }
 
-        # If client_oauth provided, copy to account dir
         if client_oauth and Path(client_oauth).exists():
             dest = acc_dir / "client_oauth_config.json"
             shutil.copy2(client_oauth, dest)
@@ -98,17 +169,35 @@ class ColabMultiAuth:
             self.accounts["active"] = name
         self._save_accounts()
 
-        print(f"✅ Account '{name}' registered")
+        print(f"✅ Success: Account '{name}' registered")
         print(f"   Config directory: {acc_dir}")
         if client_oauth:
             print(f"   OAuth config: {dest}")
 
     def remove(self, name: str):
-        """Remove an account"""
+        """Remove an account + PERMANENTLY delete its venv and kill its screen session"""
         if name not in self.accounts["accounts"]:
-            print(f"❌ Account '{name}' not found")
+            print(f"Error: Account '{name}' not found")
             return
 
+        # === NEW: Permanent cleanup of venv + screen (to prevent numpuk/piling up) ===
+        venv_dir = self._get_venv_dir(name)
+        if venv_dir.exists():
+            print(f"🗑️  Permanently deleting venv for '{name}' ({venv_dir}) ...")
+            shutil.rmtree(venv_dir, ignore_errors=True)
+
+        # Kill screen session named after this account ID
+        try:
+            subprocess.run(
+                ["screen", "-X", "-S", name, "quit"],
+                capture_output=True,
+                timeout=5
+            )
+            print(f"   ✅ Killed screen session '{name}' (if it existed)")
+        except Exception:
+            pass
+
+        # Original account dir cleanup
         acc_dir = self._get_account_dir(name)
         if acc_dir.exists():
             shutil.rmtree(acc_dir)
@@ -117,70 +206,16 @@ class ColabMultiAuth:
         if self.accounts["active"] == name:
             self.accounts["active"] = next(iter(self.accounts["accounts"]), None)
         self._save_accounts()
-        print(f"✅ Account '{name}' removed")
+        print(f"✅ Success: Account '{name}' removed (venv + screen also cleaned permanently)")
 
-    def switch(self, name: str) -> bool:
-        """Switch to account - swaps colab-cli config files"""
-        if name not in self.accounts["accounts"]:
-            print(f"❌ Account '{name}' not found. Add it first with: colab-multi add {name}")
-            return False
-
-        # Backup current config
-        self._backup_colab_config()
-
-        # Save current account's state
-        current = self.accounts["active"]
-        if current and current != name:
-            current_dir = self._get_account_dir(current)
-            if self.COLAB_TOKEN_PATH.exists():
-                shutil.copy2(self.COLAB_TOKEN_PATH, current_dir / "token.json")
-            if self.COLAB_SESSIONS_PATH.exists():
-                shutil.copy2(self.COLAB_SESSIONS_PATH, current_dir / "sessions.json")
-            if self.COLAB_SETTINGS_PATH.exists():
-                shutil.copy2(self.COLAB_SETTINGS_PATH, current_dir / "settings.json")
-            self.accounts["accounts"][current]["last_used"] = datetime.now().isoformat()
-
-        # Load new account's config
-        acc_dir = self._get_account_dir(name)
-
-        # Copy account config to colab-cli
-        token_file = acc_dir / "token.json"
-        if token_file.exists():
-            shutil.copy2(token_file, self.COLAB_TOKEN_PATH)
-        else:
-            # Remove old token to force re-auth
-            if self.COLAB_TOKEN_PATH.exists():
-                self.COLAB_TOKEN_PATH.unlink()
-
-        sessions_file = acc_dir / "sessions.json"
-        if sessions_file.exists():
-            shutil.copy2(sessions_file, self.COLAB_SESSIONS_PATH)
-        elif self.COLAB_SESSIONS_PATH.exists():
-            self.COLAB_SESSIONS_PATH.unlink()
-
-        settings_file = acc_dir / "settings.json"
-        if settings_file.exists():
-            shutil.copy2(settings_file, self.COLAB_SETTINGS_PATH)
-
-        # Handle client oauth config
-        acc_config = self.accounts["accounts"][name]
-        if acc_config.get("client_oauth_config") and Path(acc_config["client_oauth_config"]).exists():
-            shutil.copy2(acc_config["client_oauth_config"], self.COLAB_OAUTH_CONFIG)
-        elif self.COLAB_OAUTH_CONFIG.exists():
-            self.COLAB_OAUTH_CONFIG.unlink()
-
-        self.accounts["active"] = name
-        self.accounts["accounts"][name]["last_used"] = datetime.now().isoformat()
-        self._save_accounts()
-
-        # Silent switch - no print to avoid confusion
-        if not token_file.exists():
-            print(f"⚠️  No saved token for '{name}'. Run: colab-multi auth {name}")
-        return True
+    # ========== SWITCH METHOD REMOVED as per user request ==========
+    # The switch concept (single active account + token swapping for global state)
+    # has been removed to allow showing all accounts/sessions without switching.
+    # Operations now work per-account without changing a global "active" state.
 
     def list_accounts(self):
-        """List all accounts"""
-        print("\n📋 Registered Accounts")
+        """List all accounts (no more ACTIVE marker)"""
+        print("\nRegistered Accounts")
         print("=" * 60)
 
         if not self.accounts["accounts"]:
@@ -189,12 +224,12 @@ class ColabMultiAuth:
             return
 
         for name, acc in self.accounts["accounts"].items():
-            active = " ⭐ ACTIVE" if name == self.accounts.get("active") else ""
             acc_dir = self._get_account_dir(name)
             has_token = "🔑" if (acc_dir / "token.json").exists() else "❌"
             has_oauth = "📄" if acc.get("client_oauth_config") else "  "
+            venv_exists = "🐍" if (self._get_venv_dir(name) / "bin" / "python").exists() else "  "
 
-            print(f"  {has_token} {has_oauth} {name}{active}")
+            print(f"  {has_token} {has_oauth} {venv_exists} {name}")
             print(f"     Email: {acc.get('email', 'N/A')}")
             print(f"     Created: {acc.get('created_at', 'N/A')[:10]}")
             print(f"     Last Used: {acc.get('last_used', 'Never')[:19] if acc.get('last_used') else 'Never'}")
@@ -203,7 +238,7 @@ class ColabMultiAuth:
     def status(self):
         """Show current status"""
         active = self.accounts.get("active")
-        print(f"Active account: {active or 'None'}")
+        print(f"Active account (legacy): {active or 'None'}")
         print(f"Accounts dir: {self.BASE_DIR}")
         print(f"Colab config: {self.COLAB_CONFIG_DIR}")
 
@@ -212,54 +247,75 @@ class ColabMultiAuth:
             print(f"\nActive account config:")
             print(f"  Token: {'✅' if (acc_dir / 'token.json').exists() else '❌'}")
             print(f"  Sessions: {'✅' if (acc_dir / 'sessions.json').exists() else '❌'}")
+            venv_dir = self._get_venv_dir(active)
+            print(f"  Venv: {'✅' if (venv_dir / 'bin' / 'python').exists() else '❌'} @ {venv_dir}")
 
         self.list_accounts()
 
     def auth(self, name: str, strategy: str = "oauth2"):
-        """Run authentication flow for an account"""
-        if not self.switch(name):
-            return 1
+        """Run authentication flow for an account (no global switch)"""
+        # We no longer do full global switch. Just ensure token for this account.
+        acc_dir = self._get_account_dir(name)
+        token_file = acc_dir / "token.json"
+
+        if token_file.exists():
+            # Temporarily use this account's token for auth
+            if self.COLAB_TOKEN_PATH.exists():
+                shutil.copy2(self.COLAB_TOKEN_PATH, self.BASE_DIR / "token.json.bak")
+            shutil.copy2(token_file, self.COLAB_TOKEN_PATH)
 
         print(f"\n🔐 Authenticating account: {name} (strategy: {strategy})")
         print("   Opening browser / URL to login with Google...\n")
 
-        # Trigger auth by running a command that requires it
-        # The --auth flag sets the strategy
         cmd = ["colab", f"--auth={strategy}", "sessions"]
 
-        # Check if we have a client oauth config
         acc = self.accounts["accounts"].get(name, {})
         if acc.get("client_oauth_config"):
             cmd.insert(1, f"--client-oauth-config={acc['client_oauth_config']}")
 
         result = subprocess.run(cmd)
 
-        # After auth, save the new token
         if self.COLAB_TOKEN_PATH.exists():
-            acc_dir = self._get_account_dir(name)
             shutil.copy2(self.COLAB_TOKEN_PATH, acc_dir / "token.json")
-            print(f"\n✅ Token saved for account '{name}'")
+            # Restore previous token if existed
+            bak = self.BASE_DIR / "token.json.bak"
+            if bak.exists():
+                shutil.copy2(bak, self.COLAB_TOKEN_PATH)
+                bak.unlink()
 
+        print(f"\n✅ Token saved for account '{name}'")
         return result.returncode
 
     def new_session(self, account: str, session_name: str, **kwargs):
-        """Create new colab session with specific account"""
-        if not self.switch(account):
-            return 1
+        """Create new colab session with specific account.
+        Uses per-account token without changing global active.
+        """
+        acc_dir = self._get_account_dir(account)
+        token_file = acc_dir / "token.json"
+
+        # Backup current token
+        if self.COLAB_TOKEN_PATH.exists():
+            shutil.copy2(self.COLAB_TOKEN_PATH, self.BASE_DIR / "token.json.bak")
+
+        if token_file.exists():
+            shutil.copy2(token_file, self.COLAB_TOKEN_PATH)
+        else:
+            if self.COLAB_TOKEN_PATH.exists():
+                self.COLAB_TOKEN_PATH.unlink()
+
+        # Setup venv + screen (still useful)
+        self.ensure_account_venv_and_screen(account)
 
         # Build colab new command
         cmd = ["colab", "new", "-s", session_name]
 
-        # Add auth strategy
         strategy = kwargs.get("auth", "oauth2")
         cmd.insert(1, f"--auth={strategy}")
 
-        # Add client oauth config if account has one
         acc = self.accounts["accounts"].get(account, {})
         if acc.get("client_oauth_config"):
             cmd.insert(2, f"--client-oauth-config={acc['client_oauth_config']}")
 
-        # Add GPU/TPU options
         if kwargs.get("gpu"):
             cmd.extend(["--gpu", kwargs["gpu"]])
         if kwargs.get("tpu"):
@@ -272,21 +328,46 @@ class ColabMultiAuth:
 
         result = subprocess.run(cmd)
 
-        # Save updated sessions
         if self.COLAB_SESSIONS_PATH.exists():
-            acc_dir = self._get_account_dir(account)
             shutil.copy2(self.COLAB_SESSIONS_PATH, acc_dir / "sessions.json")
+
+        # Restore previous token
+        bak = self.BASE_DIR / "token.json.bak"
+        if bak.exists():
+            shutil.copy2(bak, self.COLAB_TOKEN_PATH)
+            bak.unlink()
+        elif self.COLAB_TOKEN_PATH.exists():
+            self.COLAB_TOKEN_PATH.unlink()
 
         return result.returncode
 
     def run_colab(self, account: str, args: List[str]):
-        """Run any colab command with specific account"""
-        if not self.switch(account):
-            return 1
+        """Run any colab command with specific account (no global switch)"""
+        acc_dir = self._get_account_dir(account)
+        token_file = acc_dir / "token.json"
+
+        if self.COLAB_TOKEN_PATH.exists():
+            shutil.copy2(self.COLAB_TOKEN_PATH, self.BASE_DIR / "token.json.bak")
+
+        if token_file.exists():
+            shutil.copy2(token_file, self.COLAB_TOKEN_PATH)
+        else:
+            if self.COLAB_TOKEN_PATH.exists():
+                self.COLAB_TOKEN_PATH.unlink()
 
         cmd = ["colab"] + args
         print(f"\n▶️  colab {' '.join(args)} (account: {account})")
-        return subprocess.run(cmd).returncode
+        result = subprocess.run(cmd).returncode
+
+        # Restore
+        bak = self.BASE_DIR / "token.json.bak"
+        if bak.exists():
+            shutil.copy2(bak, self.COLAB_TOKEN_PATH)
+            bak.unlink()
+        elif self.COLAB_TOKEN_PATH.exists():
+            self.COLAB_TOKEN_PATH.unlink()
+
+        return result
 
     def save_current_state(self, name: str = None):
         """Save current colab config to account"""
@@ -309,58 +390,47 @@ class ColabMultiAuth:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Multi-Account Manager for google-colab-cli",
+        description="Multi-Account Manager for google-colab-cli (with per-account venv + screen isolation)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  %(prog)s add joko1 --email joko1@gmail.com
-  %(prog)s add joko2 --email joko2@gmail.com --client-oauth /path/to/secret.json
-  %(prog)s auth joko1                    # Authenticate joko1
-  %(prog)s new joko1 colab1 --gpu T4     # Create session with joko1
-  %(prog)s list                          # List all accounts
-  %(prog)s switch joko2                  # Switch to joko2
-  %(prog)s run joko1 sessions            # Run 'colab sessions' as joko1
-  %(prog)s run joko1 exec -s colab1 -- python -c "print(1)"
+  colab-multi add joko1 --email joko1@gmail.com
+  colab-multi auth joko1
+  colab-multi new joko1 sesi1 --gpu T4     # <-- Creates venv + screen named "joko1"
+  colab-multi list
+  colab-multi remove joko1                 # <-- Also PERMANENTLY deletes venv + kills screen "joko1"
         """
     )
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
 
-    # Add account
     add_p = subparsers.add_parser("add", help="Add/register new account")
     add_p.add_argument("name", help="Account name (e.g., joko1, joko2)")
     add_p.add_argument("--email", help="Google email")
     add_p.add_argument("--client-oauth", help="Path to client_oauth_config.json")
 
-    # Remove
-    rm_p = subparsers.add_parser("remove", help="Remove account")
+    rm_p = subparsers.add_parser("remove", help="Remove account (also deletes its venv + screen permanently)")
     rm_p.add_argument("name", help="Account name")
 
-    # List
-    subparsers.add_parser("list", help="List all accounts")
+    subparsers.add_parser("list", help="List all accounts (no ACTIVE marker)")
 
-    # Status
     subparsers.add_parser("status", help="Show current status")
 
-    # Auth
     auth_p = subparsers.add_parser("auth", help="Authenticate an account")
     auth_p.add_argument("name", help="Account name")
     auth_p.add_argument("--strategy", default="oauth2", choices=["oauth2", "adc"])
 
-    # New session
-    new_p = subparsers.add_parser("new", help="Create new colab session")
-    new_p.add_argument("account", help="Account name")
+    new_p = subparsers.add_parser("new", help="Create new colab session (also sets up venv + screen for the account)")
+    new_p.add_argument("account", help="Account name (ID AKUN)")
     new_p.add_argument("session", help="Session name")
     new_p.add_argument("--gpu", help="GPU type (T4, L4, A100, H100)")
     new_p.add_argument("--tpu", help="TPU type")
     new_p.add_argument("--keep", action="store_true", help="Keep session alive")
     new_p.add_argument("--auth", default="oauth2", choices=["oauth2", "adc"])
 
-    # Run any command
     run_p = subparsers.add_parser("run", help="Run colab command with account")
     run_p.add_argument("account", help="Account name")
     run_p.add_argument("args", nargs=argparse.REMAINDER, help="colab arguments")
 
-    # Save state
     save_p = subparsers.add_parser("save", help="Save current colab state to account")
     save_p.add_argument("--account", help="Account name (uses active if not specified)")
 
