@@ -19,7 +19,7 @@ echo "[1/5] Installing system dependencies..."
 
 apt update -qq
 apt install -y python3 python3-venv git curl wget \
-    build-essential tmux nginx libssl-dev libffi-dev
+    build-essential tmux nginx screen libssl-dev libffi-dev
 
 echo "✅ System dependencies installed"
 
