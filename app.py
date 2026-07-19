@@ -80,22 +80,20 @@ def run_colab_streaming(cmd_args):
 
 
 def run_colab_multi_streaming(cmd_args):
-    """Run colab-multi command with streaming output for SSE.
-    Uses the system wrapper at /usr/local/bin/colab-multi
-    """
+    """Run colab-multi command with streaming output for SSE"""
     try:
+        # Use unbuffered python and keep stdin open to prevent process from exiting
         env = os.environ.copy()
         env["PYTHONUNBUFFERED"] = "1"
-
-        # Use the installed wrapper (more reliable)
         process = subprocess.Popen(
-            ["/usr/local/bin/colab-multi"] + cmd_args,
+            ["python", "-u", "/opt/colab/colab_multi_auth.py"] + cmd_args,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             stdin=subprocess.PIPE,
             text=True,
             bufsize=1,
             universal_newlines=True,
+            cwd="/opt/colab",
             env=env
         )
         return process
@@ -490,15 +488,12 @@ def api_create_session():
 
         if token_file.exists():
             import shutil
-            import time
             COLAB_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
             shutil.copy2(token_file, COLAB_CONFIG_DIR / "token.json")
-            time.sleep(2)  # Wait for token to be properly loaded
 
             accounts["active"] = account
             accounts["accounts"][account]["last_used"] = datetime.now().isoformat()
             save_accounts(accounts)
-            time.sleep(1)  # Extra delay before running colab new
 
     # Check if session already exists in CLI
     if validate_session_exists(session_name, account):
@@ -665,17 +660,8 @@ def api_start_console(name):
     data = request.json or {}
     account = data.get("account")
 
-    # Auto-detect account from cache if not provided
     if not account:
-        with cache_lock:
-            session = session_cache.get(name, {})
-            account = session.get("_account_source") or session.get("account")
-
-    if not account:
-        return jsonify({"success": False, "error": "Account required (session account not found)"}), 400
-
-    import time
-    time.sleep(1)
+        return jsonify({"success": False, "error": "Account required"}), 400
 
     # Kill existing console process for this session
     with console_lock:
@@ -691,10 +677,7 @@ def api_start_console(name):
     process = run_colab_multi_streaming(cmd)
 
     if process is None:
-        return jsonify({
-            "success": False, 
-            "error": "Failed to start console. Please use terminal instead: colab-multi run <account> console"
-        }), 500
+        return jsonify({"success": False, "error": "Failed to start console"}), 500
 
     with console_lock:
         console_processes[name] = process
@@ -917,52 +900,9 @@ def api_remove_account(name):
     return jsonify({"success": True, "message": f"Account '{name}' removed"})
 
 
-@app.route("/api/accounts/<name>/switch", methods=["POST"])
-def api_switch_account(name):
-    """Switch active account."""
-    accounts = read_accounts()
-
-    if name not in accounts["accounts"]:
-        return jsonify({"success": False, "error": "Account not found"}), 404
-
-    current = accounts.get("active")
-    if current and current != name:
-        current_dir = get_account_dir(current)
-        COLAB_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-        import shutil
-
-        if (COLAB_CONFIG_DIR / "token.json").exists():
-            shutil.copy2(COLAB_CONFIG_DIR / "token.json", current_dir / "token.json")
-        if (COLAB_CONFIG_DIR / "sessions.json").exists():
-            shutil.copy2(COLAB_CONFIG_DIR / "sessions.json", current_dir / "sessions.json")
-        if (COLAB_CONFIG_DIR / "settings.json").exists():
-            shutil.copy2(COLAB_CONFIG_DIR / "settings.json", current_dir / "settings.json")
-
-    acc_dir = get_account_dir(name)
-    import shutil
-
-    if (acc_dir / "token.json").exists():
-        shutil.copy2(acc_dir / "token.json", COLAB_CONFIG_DIR / "token.json")
-    else:
-        if (COLAB_CONFIG_DIR / "token.json").exists():
-            (COLAB_CONFIG_DIR / "token.json").unlink()
-
-    if (acc_dir / "sessions.json").exists():
-        shutil.copy2(acc_dir / "sessions.json", COLAB_CONFIG_DIR / "sessions.json")
-    elif (COLAB_CONFIG_DIR / "sessions.json").exists():
-        (COLAB_CONFIG_DIR / "sessions.json").unlink()
-
-    accounts["active"] = name
-    accounts["accounts"][name]["last_used"] = datetime.now().isoformat()
-    save_accounts(accounts)
-
-    sync_sessions()
-
-    return jsonify({
-        "success": True,
-        "message": f"Switched to account '{name}'",
-        "active": name
-    })
+# NOTE: /api/accounts/<name>/switch REMOVED as per request.
+# Dashboard now shows ALL ready sessions from all accounts directly (no active/switch concept in UI).
+# Internal token switching for create/discover still works per-account.
 
 
 # ============================================================================
