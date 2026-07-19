@@ -41,6 +41,25 @@
             font-size: 10px;
             font-weight: 600;
         }
+        .account-selector {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: #21262d;
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: 1px solid #30363d;
+            cursor: pointer;
+        }
+        .account-selector select {
+            background: transparent;
+            border: none;
+            color: #c9d1d9;
+            font-size: 14px;
+            cursor: pointer;
+            outline: none;
+        }
+        .account-selector select option { background: #21262d; }
         .add-account-btn {
             background: #238636;
             color: white;
@@ -377,7 +396,9 @@
             </div>
         </div>
         <div style="display:flex;align-items:center;gap:12px;">
-            <!-- Account switcher removed as requested -->
+            <div style="background:#21262d; padding:6px 12px; border-radius:6px; border:1px solid #30363d; font-size:13px; color:#8b949e;">
+                👤 Multi-Account Mode
+            </div>
             <button class="add-account-btn" onclick="showAddAccountModal()" title="Add Account">+</button>
         </div>
     </div>
@@ -444,6 +465,12 @@
                     <option value="gpu">GPU</option>
                     <option value="cpu">CPU</option>
                     <option value="tpu">TPU</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Pilih Account (ID AKUN)</label>
+                <select class="form-select" id="createAccountSelect">
+                    <option value="">-- Pilih Account --</option>
                 </select>
             </div>
             <div class="modal-actions">
@@ -570,31 +597,8 @@
             accounts = data.accounts;
             currentAccount = data.active || '';
 
-            const select = document.getElementById('accountSelect');
-            select.innerHTML = '';
-
-            if (accounts.length === 0) {
-                select.innerHTML = '<option value="">No accounts</option>';
-                return;
-            }
-
-            accounts.forEach(acc => {
-                const opt = document.createElement('option');
-                opt.value = acc.name;
-                opt.textContent = acc.name + (acc.active ? ' ★' : '') + (acc.has_token ? '' : ' (no auth)');
-                if (acc.active) opt.selected = true;
-                select.appendChild(opt);
-            });
-        }
-
-        async function switchAccount(name) {
-            if (!name) return;
-            const data = await apiPost(`/api/accounts/${name}/switch`, {});
-            if (data && data.success) {
-                showToast(`Switched to account: ${name}`, 'success');
-                currentAccount = name;
-                loadSessions();
-            }
+            // Note: Account switch removed. Dashboard shows ALL ready sessions from all accounts.
+            // currentAccount kept for create session default.
         }
 
         function showAddAccountModal() {
@@ -774,7 +778,7 @@
                         <span>${formatTime(s.created_at)}</span>
                     </div>
                 </div>
-                <!-- Session URL hidden as requested -->
+                ${s.url ? `<div class="session-url" onclick="window.open('${s.url}', '_blank')">${s.url}</div>` : ''}
 
                 <!-- INLINE CONSOLE -->
                 <div class="inline-console ${isConsoleOpen ? 'active' : ''}" id="console-${s.name}">
@@ -783,7 +787,6 @@
                             <div class="inline-console-dot ${isConsoleOpen ? 'connected' : ''}" id="console-dot-${s.name}"></div>
                             <span id="console-status-${s.name}">${isConsoleOpen ? 'Connected' : 'Disconnected'}</span>
                         </div>
-                        <span style="font-size:10px; color:#8b949e; margin-right:8px;">colab-multi run ${s.account} console</span>
                         <button class="btn" style="padding:2px 8px;font-size:10px;" onclick="closeConsole('${s.name}')">✕ Tutup</button>
                     </div>
                     <div class="inline-console-output" id="console-output-${s.name}">${consoleBuffer}</div>
@@ -800,7 +803,7 @@
                     <button class="btn ${isConsoleOpen ? 'btn-active' : ''}" id="btn-console-${s.name}" onclick="toggleConsole('${s.name}', '${s.account || currentAccount || ''}')">
                         💻 ${isConsoleOpen ? 'Console On' : 'Console'}
                     </button>
-                    <button class="btn btn-danger" onclick="stopSession('${s.name}')">⏹ Stop</button>
+                    <button class="btn btn-danger" onclick="stopSession('${s.name}', '${s.account || ''}')">⏹ Stop</button>
                 </div>
             </div>
             `;
@@ -825,11 +828,23 @@
         // CREATE SESSION
         // ============================================
         function showCreateSessionModal() {
-            if (!currentAccount) {
-                showToast('Pilih account terlebih dahulu!', 'warning');
+            if (!accounts || accounts.length === 0) {
+                showToast('Tambahkan account terlebih dahulu!', 'warning');
                 return;
             }
             document.getElementById('sessionName').value = '';
+
+            // Populate account select in create modal
+            const accSelect = document.getElementById('createAccountSelect');
+            accSelect.innerHTML = '<option value="">-- Pilih Account --</option>';
+            accounts.forEach(acc => {
+                const opt = document.createElement('option');
+                opt.value = acc.name;
+                opt.textContent = acc.name + (acc.email ? ` (${acc.email})` : '');
+                if (acc.active) opt.selected = true;
+                accSelect.appendChild(opt);
+            });
+
             showModal('createModal');
         }
 
@@ -847,11 +862,19 @@
             btn.innerHTML = '<div class="loading-spinner"></div> Creating...';
             btn.disabled = true;
 
+            const chosenAccount = document.getElementById('createAccountSelect').value;
+            if (!chosenAccount) {
+                showToast('Pilih account untuk session ini!', 'error');
+                btn.innerHTML = 'Buat';
+                btn.disabled = false;
+                return;
+            }
+
             const data = await apiPost('/api/sessions', {
                 name,
                 gpu,
                 variant,
-                account: currentAccount,
+                account: chosenAccount,
                 auto_console: true
             });
 
@@ -861,19 +884,11 @@
             if (data && data.success) {
                 showToast(`Session ${name} berhasil dibuat!`, 'success');
                 hideModal('createModal');
-                
-                // Refresh sessions multiple times to catch new session quickly
                 loadSessions();
-                setTimeout(() => loadSessions(), 2000);
-                setTimeout(() => loadSessions(), 5000);
-                setTimeout(() => loadSessions(), 8000);
 
-                // Try to open console after creation
                 setTimeout(() => {
-                    if (currentAccount) {
-                        toggleConsole(name, currentAccount);
-                    }
-                }, 4000);
+                    toggleConsole(name, chosenAccount);
+                }, 3000);
             } else {
                 showToast(data?.error || 'Gagal membuat session', 'error');
             }
@@ -882,12 +897,13 @@
         // ============================================
         // STOP SESSION
         // ============================================
-        async function stopSession(name) {
+        async function stopSession(name, account = '') {
             if (!confirm(`Yakin mau stop session "${name}"?`)) return;
 
             closeConsole(name);
 
-            const data = await apiDelete(`/api/sessions/${name}?account=${currentAccount}`);
+            const accParam = account || currentAccount || '';
+            const data = await apiDelete(`/api/sessions/${name}?account=${accParam}`);
             if (data && data.success) {
                 showToast(`Session ${name} dihentikan`, 'success');
                 loadSessions();
